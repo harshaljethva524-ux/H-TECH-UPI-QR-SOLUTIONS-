@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic UPI QR Code Generator & Share</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load QR Code Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        /* Custom styles for a polished look */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+        /* Custom styling for the QR code container */
+        #qrcode {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            background-color: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        /* Style the generated canvas/image inside the container */
+        #qrcode > canvas {
+            border-radius: 0.5rem;
+        }
+        .input-field {
+            padding: 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 0.75rem;
+            width: 100%;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .input-field:focus {
+            outline: none;
+            border-color: #4c51bf; /* Indigo focus color */
+            box-shadow: 0 0 0 3px rgba(76, 81, 191, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-lg bg-white rounded-2xl shadow-xl p-8 space-y-6">
+        <header class="text-center">
+            <h1 class="text-3xl font-extrabold text-gray-800">H TECH QR SOLUTIONS</h1>
+            <p class="text-gray-500 mt-1">Generate a QR code and share the direct payment link and image.</p>
+        </header>
+
+        <!-- Input Fields -->
+        <div class="space-y-4">
+            <div>
+                <label for="upiId" class="block text-sm font-medium text-gray-700 mb-1">UPI ID (Payee Address)</label>
+                <input type="text" id="upiId" placeholder="e.g., yourname@bankname" class="input-field">
+            </div>
+            <div>
+                <label for="amount" class="block text-sm font-medium text-gray-700 mb-1">Amount (INR)</label>
+                <input type="number" id="amount" placeholder="e.g., 1500.00" class="input-field" step="0.01">
+            </div>
+             <div>
+                <label for="mobileNo" class="block text-sm font-medium text-gray-700 mb-1">Recipient Mobile Number (Optional, for direct WhatsApp link sharing)</label>
+                <input type="tel" id="mobileNo" placeholder="e.g., 919876543210 (include country code)" class="input-field">
+            </div>
+            <div id="error-message" class="text-red-600 text-sm font-medium hidden"></div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-col sm:flex-row gap-3">
+            <button id="generateBtn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition duration-300 shadow-md hover:shadow-lg">
+                Generate QR Code
+            </button>
+            <button id="downloadBtn" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition duration-300 shadow-md hover:shadow-lg opacity-50 cursor-not-allowed" disabled>
+                Download QR Image
+            </button>
+        </div>
+
+        <div class="pt-2 space-y-3">
+            <!-- Primary Share Button: Uses Native Share API to send the image file AND the link -->
+             <button id="nativeShareBtn" class="w-full bg-lime-600 hover:bg-lime-700 text-white font-semibold py-3 rounded-xl transition duration-300 shadow-md hover:shadow-lg opacity-50 cursor-not-allowed flex items-center justify-center gap-2" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-share-2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+                Share Link & QR Image (via Native Share)
+            </button>
+            
+            <!-- Secondary Share Button: Uses WhatsApp deep link to send ONLY the text/link (can target a number) -->
+            <button id="whatsappLinkBtn" class="w-full bg-slate-500 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition duration-300 shadow-md hover:shadow-lg opacity-50 cursor-not-allowed flex items-center justify-center gap-2" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square-text"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="13" x2="13" y1="8" y2="12"/><line x1="16" x2="8" y1="12" y2="12"/></svg>
+                Share Link Only (Direct to WhatsApp Number)
+            </button>
+
+            <p id="share-tip" class="text-xs text-gray-500 mt-2 text-center text-red-500 font-medium hidden">
+                Note: File sharing is not fully supported on your device. Use the 'Share Link Only' option.
+            </p>
+        </div>
+
+        <!-- QR Code Display Area -->
+        <div class="pt-4 flex justify-center items-center">
+            <div id="qrcode" class="min-h-[256px] min-w-[256px] flex items-center justify-center">
+                <p class="text-gray-400 text-center">Enter details and click 'Generate'</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variable for the QR code instance and URL
+        let qrCodeInstance = null;
+        let qrCodeUrl = null;
+        let qrCodeBlob = null; // Stores the QR image file data (Blob)
+
+        const upiIdInput = document.getElementById('upiId');
+        const amountInput = document.getElementById('amount');
+        const mobileNoInput = document.getElementById('mobileNo'); // Added for direct WhatsApp sharing
+        const generateBtn = document.getElementById('generateBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        
+        const nativeShareBtn = document.getElementById('nativeShareBtn'); 
+        const whatsappLinkBtn = document.getElementById('whatsappLinkBtn');
+        
+        const qrCodeContainer = document.getElementById('qrcode');
+        const errorMessage = document.getElementById('error-message');
+        const shareTip = document.getElementById('share-tip');
+        
+        // Check if the Web Share API with files is supported
+        const isFileShareSupported = navigator.share && navigator.canShare && navigator.canShare({ 
+            files: [new File([''], 'placeholder.png', { type: 'image/png' })] 
+        });
+
+        /**
+         * Utility to convert a Data URI (like canvas.toDataURL) to a Blob object.
+         */
+        function dataURItoBlob(dataURI) {
+            const parts = dataURI.split(',');
+            if (parts.length !== 2) return null;
+
+            const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/png';
+            const b64 = parts[1];
+            
+            const byteString = atob(b64);
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            
+            return new Blob([ab], { type: mime });
+        }
+
+
+        /**
+         * Utility to update button appearance (disabled/enabled state).
+         */
+        function updateButtonState(button, enable) {
+            
+            // Special check for the native share button: disable/warn if file sharing isn't supported
+            if (button.id === 'nativeShareBtn' && !isFileShareSupported) {
+                 button.disabled = true;
+                 button.classList.remove('bg-lime-600', 'hover:bg-lime-700');
+                 button.classList.add('bg-gray-400', 'cursor-not-allowed');
+                 shareTip.classList.remove('hidden');
+                 return;
+            }
+
+            button.disabled = !enable;
+            if (enable) {
+                button.classList.remove('opacity-50', 'cursor-not-allowed');
+                // Re-apply hover classes based on button ID
+                if (button.id === 'downloadBtn') {
+                    button.classList.add('hover:bg-green-600');
+                } else if (button.id === 'nativeShareBtn') {
+                    button.classList.add('hover:bg-lime-700');
+                    button.classList.remove('bg-gray-400'); // Ensure gray is removed if it was there
+                } else if (button.id === 'whatsappLinkBtn') {
+                     button.classList.add('hover:bg-slate-600');
+                }
+            } else {
+                button.classList.add('opacity-50', 'cursor-not-allowed');
+                button.classList.remove('hover:bg-green-600', 'hover:bg-lime-700', 'hover:bg-slate-600');
+            }
+        }
+
+        /**
+         * Clears the QR code display and resets the action buttons.
+         */
+        function resetQrDisplay() {
+            qrCodeContainer.innerHTML = '<p class="text-gray-400 text-center">Enter details and click \'Generate\'</p>';
+            updateButtonState(downloadBtn, false);
+            updateButtonState(nativeShareBtn, false);
+            updateButtonState(whatsappLinkBtn, false);
+            errorMessage.classList.add('hidden');
+            shareTip.classList.add('hidden');
+            qrCodeBlob = null; // Reset image data
+        }
+
+        /**
+         * Constructs the UPI payment URL (deep link).
+         */
+        function constructUpiUrl(upiId, amount) {
+            const upiIdClean = upiId.trim();
+            const amountFloat = parseFloat(amount);
+            
+            if (upiIdClean === '' || isNaN(amountFloat) || amountFloat <= 0) {
+                return null;
+            }
+
+            const cleanUpiId = encodeURIComponent(upiIdClean);
+            const cleanAmount = amountFloat.toFixed(2); 
+
+            // UPI link format: upi://pay?pa={UPI_ID}&am={AMOUNT}&cu=INR
+            return `upi://pay?pa=${cleanUpiId}&am=${cleanAmount}&cu=INR`;
+        }
+
+        /**
+         * Generates and displays the QR code.
+         */
+        function generateQrCode() {
+            const upiId = upiIdInput.value;
+            const amount = amountInput.value;
+
+            const url = constructUpiUrl(upiId, amount);
+
+            if (!url) {
+                errorMessage.textContent = 'Please enter a valid UPI ID and a positive amount.';
+                errorMessage.classList.remove('hidden');
+                resetQrDisplay();
+                return;
+            }
+            errorMessage.classList.add('hidden');
+            qrCodeUrl = url;
+
+            // Clear previous QR code instance and container content
+            qrCodeContainer.innerHTML = '';
+            if (qrCodeInstance) {
+                qrCodeInstance = null;
+            }
+
+            try {
+                // Initialize the QR code generator
+                qrCodeInstance = new QRCode(qrCodeContainer, {
+                    text: url,
+                    width: 256,
+                    height: 256,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+
+                // Wait for the canvas to render before converting it to a shareable file
+                setTimeout(() => {
+                     const canvas = qrCodeContainer.querySelector('canvas');
+                     if (canvas) {
+                         // Convert the canvas data URL to a Blob
+                         const dataURL = canvas.toDataURL("image/png"); 
+                         qrCodeBlob = dataURItoBlob(dataURL);
+                         
+                         // Enable action buttons
+                         updateButtonState(downloadBtn, true);
+                         updateButtonState(nativeShareBtn, true);
+                         updateButtonState(whatsappLinkBtn, true);
+                     }
+                }, 100); // 100ms delay for canvas rendering
+
+            } catch (error) {
+                qrCodeContainer.innerHTML = `<p class="text-red-500 text-center">Error generating QR code.</p>`;
+                console.error("QR Code Generation Error:", error);
+                updateButtonState(downloadBtn, false);
+                updateButtonState(nativeShareBtn, false);
+                updateButtonState(whatsappLinkBtn, false);
+            }
+        }
+
+        /**
+         * Downloads the generated QR code as a PNG image.
+         */
+        function downloadQrCode() {
+            if (!qrCodeInstance) return;
+
+            const canvas = qrCodeContainer.querySelector('canvas');
+            if (!canvas) {
+                errorMessage.textContent = 'QR code image not found for download.';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            const link = document.createElement('a');
+            link.download = `UPI_QR_${upiIdInput.value.split('@')[0]}_${parseFloat(amountInput.value).toFixed(2)}.png`;
+            link.href = canvas.toDataURL("image/png"); 
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        /**
+         * Uses the Web Share API to share the payment link and the QR code image file.
+         * This opens the native share sheet (cannot pre-select recipient).
+         */
+        async function shareLinkAndImageNative() {
+            if (!qrCodeUrl || !qrCodeBlob || !isFileShareSupported) {
+                 errorMessage.textContent = 'Error: Cannot share file. QR code not generated or Web Share API not supported.';
+                 errorMessage.classList.remove('hidden');
+                 return;
+            }
+
+            const amount = parseFloat(amountInput.value).toFixed(2);
+            const upiId = upiIdInput.value.trim();
+
+            const fileName = `UPI_QR_${upiId.split('@')[0]}_${amount}.png`;
+            
+            // Create a File object from the Blob
+            const qrCodeFile = new File([qrCodeBlob], fileName, { type: 'image/png' });
+
+            // Construct the share message
+            const title = `UPI Payment Request: ₹${amount}`;
+            const message = 
+                `💰 UPI Payment Request 💰\n\n` +
+                `Amount: ₹${amount}\n` +
+                `Payee UPI ID: ${upiId}\n\n` +
+                `The QR Code image is attached!\n` +
+                `Click the link to pay:\n` +
+                `${qrCodeUrl}`;
+
+            try {
+                // Use the native share function to send both the file and text
+                await navigator.share({
+                    files: [qrCodeFile], // Attach the image file
+                    title: title,
+                    text: message
+                });
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                     errorMessage.textContent = `Native Share failed: ${error.message}.`;
+                     errorMessage.classList.remove('hidden');
+                }
+            }
+        }
+        
+        /**
+         * Uses the WhatsApp deep link to share ONLY the payment link as text.
+         * If a mobile number is provided, it attempts to open the chat directly.
+         */
+        function shareLinkOnlyOnWhatsApp() {
+            if (!qrCodeUrl) {
+                 errorMessage.textContent = 'Error: QR code/link not generated.';
+                 errorMessage.classList.remove('hidden');
+                 return;
+            }
+
+            const amount = parseFloat(amountInput.value).toFixed(2);
+            const upiId = upiIdInput.value.trim();
+            
+            const mobileNo = mobileNoInput.value.trim();
+            // Use the number if provided, otherwise use an empty string which opens contact list
+            const whatsappRecipient = mobileNo.match(/^\d+$/) ? mobileNo : ''; 
+
+            const message = 
+                `💰 UPI Payment Request 💰\n\n` +
+                `Amount: ₹${amount}\n` +
+                `Payee UPI ID: ${upiId}\n\n` +
+                `Click the link to pay:\n` +
+                `${qrCodeUrl}`;
+            
+            // Construct the WhatsApp URL with or without the recipient number
+            const whatsappUrl = `https://wa.me/${whatsappRecipient}?text=${encodeURIComponent(message)}`;
+            
+            window.open(whatsappUrl, '_blank');
+        }
+
+
+        // --- Event Listeners ---
+        generateBtn.addEventListener('click', generateQrCode);
+        downloadBtn.addEventListener('click', downloadQrCode);
+        nativeShareBtn.addEventListener('click', shareLinkAndImageNative); // Shares file + link via native API
+        whatsappLinkBtn.addEventListener('click', shareLinkOnlyOnWhatsApp); // Shares text/link via WhatsApp deep link (can target a number)
+
+        // Initialize display on load
+        window.onload = function() {
+            // Check share support immediately and update the button if needed
+            updateButtonState(nativeShareBtn, false); // Initialize the native share button state
+            updateButtonState(whatsappLinkBtn, false); // Initialize the link-only share button state
+            // Generate initial QR code (this will display the error message since fields are blank)
+            generateQrCode();
+        };
+
+    </script>
+</body>
+</html>
+
+
